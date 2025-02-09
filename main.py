@@ -37,6 +37,10 @@ class Myroot(BoxLayout):
         if self.running:
             self.elapsed_time = time.time() - self.start_time
             self.time_displayed.text = f"{self.elapsed_time:.3f} giây"
+            Clock.schedule_interval(recvsignal, 0.01)
+            if recvsignal() == "0":
+                self.Stop_timer()
+            
 
     def Start_timer(self, instance):
         if not self.running:
@@ -60,33 +64,34 @@ class MyApp(App):
     def build(self):
         return Myroot()
 
-if __name__ == '__main__':
-    BluetoohAdapter = autoclass("android.bluetooth.BlueToothAdapter")
-    BluetoohDevice = autoclass("android.bluetooth.BlueToothDevice")
-    BluetoohSocket = autoclass("android.bluetooth.BlueToothSocket")
-    socket = None
-    send_stream = None
-    recv_stream = None
-    uuid = autoclass('java.util.UUID').fromString("00001101-0000-1000-8000-00805F9B34FB")
-    bt_adapter = BluetoohAdapter.getDefaultApdapter()
-    devices = bt_adapter.getBondedDevices().toArray()
-    
-    for device in devices:
-        if device.getName() == "TLCT":
-            socket = device.createRfCommSocketToServiceRecord(uuid)
-            socket.conect()
-            send_stream =socket.getOutputStream()
-            recv_stream = socket.getInputStream()
-    def sendsignal(signal):
-        send_stream.write(signal.encode("utf-8"))
-        send_stream.flush()
-    def recvsignal(data):
-        while True:
-            buffer = bytearray(1024)
-            data = recv_stream.read(buffer, 0, len(buffer))
-            message = bytes(buffer[:data]).decode("utf-8").strip()
-            print(message)
-            if message == "0":
-                Myroot.Stop_timer()
-    MyApp().run()
-    Clock.schedule_interval(recvsignal, 0.01)
+
+BluetoothAdapter = autoclass('android.bluetooth.BluetoothAdapter')
+BluetoothDevice = autoclass('android.bluetooth.BluetoothDevice')
+BluetoothSocket = autoclass('android.bluetooth.BluetoothSocket')
+uuid = autoclass('java.util.UUID').fromString("00001101-0000-1000-8000-00805F9B34FB")
+socket = None
+recv_stream = None
+send_stream = None
+bt_adapter = BluetoothAdapter.getDefaultAdapter()
+devices = bt_adapter.getBondedDevices().toArray()
+
+for device in devices:
+    if device.getName() == "TLCT":
+        socket = device.createRfcommSocketToServiceRecord(uuid)
+        socket.connect()
+        print(f'connected to {device.getName()}')
+        recv_stream = socket.getInputStream()
+        send_stream = socket.getOutputStream()
+def sendsignal(signal):
+    send_stream.write(signal.encode("utf-8"))
+    send_stream.flush()
+def recvsignal():
+    while True:
+        buffer = bytearray(1024)
+        data = recv_stream.read(buffer, 0, len(buffer))
+        message = bytes(buffer[:data]).decode("utf-8").strip()
+        print(message)
+        return message
+
+MyApp().run()
+
