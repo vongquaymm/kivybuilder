@@ -3,99 +3,88 @@ from kivy.app import App
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
-from kivy.clock import Clock
-import threading
 import time
-from threading import Thread
+from kivy.clock import Clock
 from jnius import autoclass
+class Myroot(BoxLayout):
+    def __init__(self, **kwargs):
+        self.elapsed_time = 0.0
+        self.start_time = 0.0
+        self.running = False
+        super().__init__(orientation="vertical", spacing=20, padding=20, **kwargs)
 
-BluetoothAdapter = autoclass('android.bluetooth.BluetoothAdapter')
-BluetoothDevice = autoclass('android.bluetooth.BluetoothDevice')
-BluetoothSocket = autoclass('android.bluetooth.BluetoothSocket')
-uuid = autoclass('java.util.UUID').fromString("00001101-0000-1000-8000-00805F9B34FB")
-socket = None
-recv_stream = None
-send_stream = None
-bt_adapter = BluetoothAdapter.getDefaultAdapter()
-devices = bt_adapter.getBondedDevices().toArray()
+        # Hiển thị thời gian
+        self.time_displayed = Label(text="0.000s", font_size=80, size_hint=(1, 0.5))
 
-for device in devices:
-    if device.getName() == "TLCT":
-        socket = device.createRfcommSocketToServiceRecord(uuid)
-        socket.connect()
-        print(f'connected to {device.getName()}')
-        recv_stream = socket.getInputStream()
-        send_stream = socket.getOutputStream()
+        # Layout chứa các nút
+        self.BtnLayout = BoxLayout(orientation="horizontal", spacing=15, size_hint=(1, 0.3))
 
+        # Các nút điều khiển
+        self.btn_start = Button(text="Start", font_size=30, size_hint=(1, 1), on_press = self.Start_timer)
+        self.btn_stop = Button(text="Stop", font_size=30, size_hint=(1, 1), on_press = self.Stop_timer)
+        self.btn_reset = Button(text="Reset", font_size=30, size_hint=(1, 1), on_press = self.Reset_timer)
 
-def send_signal(signal):
-    send_stream.write(signal.decode("utf-8"))
-    send_stream.flush()
-def receive_signal():
-    while True:
+        # Thêm nút vào layout
+        self.BtnLayout.add_widget(self.btn_start)
+        self.BtnLayout.add_widget(self.btn_stop)
+        self.BtnLayout.add_widget(self.btn_reset)
+
+        # Thêm các phần vào giao diện chính
+        self.add_widget(self.time_displayed)
+        self.add_widget(self.BtnLayout)
+    
+    def update_time(self, instance):
+        if self.running:
+            self.elapsed_time = time.time() - self.start_time
+            self.time_displayed.text = f"{self.elapsed_time:.3f} giây"
+
+    def Start_timer(self, instance):
+        if not self.running:
+            self.running = True
+            self.start_time = time.time()
+            Clock.schedule_interval(self.update_time, 0.01)
+            sendsignal("1")
+    def Stop_timer(self, instance):
+        self.running = False
+        Clock.unschedule(self.update_time)
+        sendsignal("0")
+    def Reset_timer(self, instance):
+        self.running = False
+        self.elapsed_time = 0.0
+        self.start_time = 0.0
+        self.time_displayed.text = "0.000 giây"
+        Clock.unschedule(self.update_time)
+        sendsignal("0")
+
+class MyApp(App):
+    def build(self):
+        return Myroot()
+
+if __name__ == '__main__':
+    BluetoohAdapter = autoclass("android.bluetooth.BlueToothAdapter")
+    BluetoohDevice = autoclass("android.bluetooth.BlueToothDevice")
+    BluetoohSocket = autoclass("android.bluetooth.BlueToothSocket")
+    socket = None
+    send_stream = None
+    recv_stream = None
+    uuid = autoclass('java.util.UUID').fromString("00001101-0000-1000-8000-00805F9B34FB")
+    bt_adapter = BluetoohAdapter.getDefaultApdapter()
+    devices = bt_adapter.getBondedDevices().toArray()
+    
+    for device in devices:
+        if device.getName() == "TLCT":
+            socket = device.createRfCommSocketToServiceRecord(uuid)
+            socket.conect()
+            send_stream =socket.getOutputStream()
+            recv_stream = socket.getInputStream()
+    def sendsignal(signal):
+        send_stream.write(signal.encode("utf-8"))
+        send_stream.flush()
+    def recvsignal(data):
         buffer = bytearray(1024)
         data = recv_stream.read(buffer, 0, len(buffer))
         message = bytes(buffer[:data]).decode("utf-8").strip()
         print(message)
         if message == "0":
-            AppRoot.stop_timer()
-
-
-
-class AppRoot(BoxLayout):
-    def __init__(self, **kwargs):
-        super(AppRoot, self).__init__(**kwargs)
-        self.orientation = "vertical"
-        
-        # Biến lưu trữ thời gian và trạng thái chạy
-        self.elapsed_time = 0.0
-        self.start_time = 0.0
-        self.running = False
-        self.timer_thread = None
-
-        # Label hiển thị thời gian (ban đầu là 0.000 giây)
-        self.time_displayed = Label(text="0.000 giây", font_size=100)
-        self.add_widget(self.time_displayed)
-
-        # Layout chứa các nút điều khiển
-        button_layout = BoxLayout(orientation="horizontal", spacing=10, padding=(0, 100, 0, 50))
-        self.start_btn = Button(text="Start")
-        self.stop_btn  = Button(text="Stop")
-        self.reset_btn = Button(text="Reset")
-
-        button_layout.add_widget(self.start_btn)
-        button_layout.add_widget(self.stop_btn)
-        button_layout.add_widget(self.reset_btn)
-        self.add_widget(button_layout)
-
-        # Gán sự kiện cho các nút
-        self.start_btn.bind(on_press=self.start_timer)
-        self.stop_btn.bind(on_press=self.stop_timer)
-        self.reset_btn.bind(on_press=self.reset_timer)
-    def update_timer(self):
-        while self.running:
-            self.elapsed_time = time.time() - self.start_time
-            self.time_displayed.text = f"{self.elapsed_time:.3f} giây"
-            time.sleep(0.01)
-    def start_timer(self):
-        if not self.running:
-            send_signal("1")
-            self.running = True
-            self.start_time = time.time()
-            Thread(target=self.update_timer, daemon=True).start()
-    def stop_timer(self):
-        self.running = False
-        send_signal("0")
-    def reset_timer(self):
-        self.running = False
-        self.elapsed_time = 0.0
-        self.time_displayed.text = "0.000 giây"
-
-
-class AppGui(App):
-    def build(self):
-        return AppRoot()
-
-if __name__ == "__main__":
-    Thread(target=receive_signal, daemon=True).start()
-    AppGui().run()
+            Myroot.Stop_timer()
+    MyApp().run()
