@@ -81,10 +81,12 @@ if __name__ == '__main__':
         send_stream.write(signal.encode("utf-8"))
         send_stream.flush()
     def recvsignal(data):
-        buffer = bytearray(1024)
-        data = recv_stream.read(buffer, 0, len(buffer))
-        message = bytes(buffer[:data]).decode("utf-8").strip()
-        print(message)
-        if message == "0":
-            Myroot.Stop_timer()
+        while True:
+            buffer = bytearray(1024)
+            data = recv_stream.read(buffer, 0, len(buffer))
+            message = bytes(buffer[:data]).decode("utf-8").strip()
+            print(message)
+            if message == "0":
+                Myroot.Stop_timer()
     MyApp().run()
+    Clock.schedule_interval(recvsignal, 0.01)
